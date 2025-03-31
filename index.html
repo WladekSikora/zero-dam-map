@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -14,6 +13,15 @@
     .leaflet-popup-content {
       font-size: 14px;
     }
+    .label-text {
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -22,7 +30,7 @@
   <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, push, onChildAdded } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getDatabase, ref, push, remove, onChildAdded, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDADCmaHAUxkubxwbEA0XXq_ra_CrIUlt0",
@@ -45,10 +53,11 @@
     });
 
     const bounds = [[0,0], [2000,3000]];
-    const image = L.imageOverlay('zeroDamHD.webp', bounds).addTo(map);
+    L.imageOverlay('zeroDamHD.webp', bounds).addTo(map);
     map.fitBounds(bounds);
 
-    // Add new marker on click
+    const markerMap = new Map();
+
     map.on('click', function(e) {
       const name = prompt("Enter location name:");
       if (!name) return;
@@ -59,14 +68,33 @@
       });
     });
 
-    // Load existing markers
     onChildAdded(markersRef, snapshot => {
       const data = snapshot.val();
+      const key = snapshot.key;
       if (data.lat && data.lng && data.name) {
-        L.marker([data.lat, data.lng]).addTo(map)
-          .bindPopup(`<b>${data.name}</b>`);
+        const marker = L.marker([data.lat, data.lng]).addTo(map);
+        const label = L.divIcon({ className: 'label-text', html: data.name });
+        const textMarker = L.marker([data.lat, data.lng], { icon: label, interactive: false }).addTo(map);
+
+        marker.bindPopup(`<b>${data.name}</b><br><button onclick="window.deleteMarker('${key}')">Удалить</button>`);
+        markerMap.set(key, [marker, textMarker]);
       }
     });
+
+    onChildRemoved(markersRef, snapshot => {
+      const key = snapshot.key;
+      const markers = markerMap.get(key);
+      if (markers) {
+        markers.forEach(m => map.removeLayer(m));
+        markerMap.delete(key);
+      }
+    });
+
+    window.deleteMarker = (key) => {
+      if (confirm("Удалить эту метку?")) {
+        remove(ref(db, `markers/${key}`));
+      }
+    };
   </script>
 </body>
 </html>
